@@ -42,6 +42,44 @@ def create_point_cloud_from_depth_image(depth, camera, organized=True):
         cloud = cloud.reshape([-1, 3])
     return cloud
 
+def create_point_cloud_from_depth_image_with_mask(depth, color, camera, mask, organized=True):
+    """ Generate point cloud using depth image only.
+
+        Input:
+            depth: [numpy.ndarray, (H,W), numpy.float32]
+                depth image
+            camera: [CameraInfo]
+                camera intrinsics
+            organized: bool
+                whether to keep the cloud in image shape (H,W,3)
+
+        Output:
+            cloud: [numpy.ndarray, (H,W,3)/(H*W,3), numpy.float32]
+                generated cloud, (H,W,3) for organized=True, (H*W,3) for organized=False
+    """
+    assert(depth.shape[0] == camera.height and depth.shape[1] == camera.width)
+    assert(color.shape[2]==3)
+    xmap = np.arange(camera.width)
+    ymap = np.arange(camera.height)
+    xmap, ymap = np.meshgrid(xmap, ymap)
+    points_z = depth / camera.scale
+    points_x = (xmap - camera.cx) * points_z / camera.fx
+    points_y = (ymap - camera.cy) * points_z / camera.fy
+    cloud = np.stack([points_x, points_y, points_z], axis=-1)
+    print(np.max(depth))
+    input("ff")
+    color_organized = color.reshape([-1, 3])
+    cloud_organized = cloud.reshape([-1, 3])
+    mask_organized = mask.reshape([-1])
+    # print(np.shape(color_organized))
+    # print(np.shape(cloud_organized))
+    cloud_masked = cloud_organized[mask_organized>0]
+    color_masked = color_organized[mask_organized>0]
+    # print(np.shape(color_masked))
+    # print(np.shape(cloud_masked))
+
+    return cloud_masked, color_masked
+
 def transform_point_cloud(cloud, transform, format='4x4'):
     """ Transform points to new coordinates with transformation matrix.
 
