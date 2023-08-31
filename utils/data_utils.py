@@ -66,8 +66,8 @@ def create_point_cloud_from_depth_image_with_mask(depth, color, camera, mask, or
     points_x = (xmap - camera.cx) * points_z / camera.fx
     points_y = (ymap - camera.cy) * points_z / camera.fy
     cloud = np.stack([points_x, points_y, points_z], axis=-1)
-    print(np.max(depth))
-    input("ff")
+    # print(np.max(depth))
+    # input("ff")
     color_organized = color.reshape([-1, 3])
     cloud_organized = cloud.reshape([-1, 3])
     mask_organized = mask.reshape([-1])
