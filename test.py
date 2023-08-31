@@ -41,6 +41,7 @@ def my_worker_init_fn(worker_id):
     pass
 
 # Create Dataset and Dataloader
+# 测试数据集合
 TEST_DATASET = GraspNetDataset(cfgs.dataset_root, valid_obj_idxs=None, grasp_labels=None, split='test', camera=cfgs.camera, num_points=cfgs.num_point, remove_outlier=True, augment=False, load_label=False)
 
 print(len(TEST_DATASET))
@@ -62,6 +63,7 @@ print("-> loaded checkpoint %s (epoch: %d)"%(cfgs.checkpoint_path, start_epoch))
 
 # ------------------------------------------------------------------------- GLOBAL CONFIG END
 
+# 测试代码
 def inference():
     batch_interval = 100
     stat_dict = {} # collect statistics
