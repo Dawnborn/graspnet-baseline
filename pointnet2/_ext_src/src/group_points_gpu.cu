@@ -1,5 +1,5 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
-// 
+//
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
@@ -8,8 +8,11 @@
 
 #include "cuda_utils.h"
 
-// input: points(b, c, n) idx(b, npoints, nsample)
-// output: out(b, c, npoints, nsample)
+// input: points(b, c, n)(1 3 20000)
+// idx: (b, npoints, nsample)(1 1024 64)
+// output: out(b, c, npoints, nsample)(1 3 1024 64)
+// block size: (1024, 3)
+// 已知点在原始点云中的idx，将对应的点填入out
 __global__ void group_points_kernel(int b, int c, int n, int npoints,
                                     int nsample,
                                     const float *__restrict__ points,
@@ -32,11 +35,13 @@ __global__ void group_points_kernel(int b, int c, int n, int npoints,
   }
 }
 
-void group_points_kernel_wrapper(int b, int c, int n, int npoints, int nsample,
+void group_points_kernel_wrapper(int b, int c, int n, int npoints,
+                                 int nsample,  // 1 3 20000 1024 64
                                  const float *points, const int *idx,
-                                 float *out) {
+                                 float *out) {  // 1024*64
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
+  // block 尺寸为1024，3 (num_seed, 3)
   group_points_kernel<<<b, opt_block_config(npoints, c), 0, stream>>>(
       b, c, n, npoints, nsample, points, idx, out);
 

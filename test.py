@@ -15,13 +15,13 @@ sys.path.append(os.path.join(ROOT_DIR, 'models'))
 sys.path.append(os.path.join(ROOT_DIR, 'dataset'))
 sys.path.append(os.path.join(ROOT_DIR, 'utils'))
 
-from graspnet import GraspNet, pred_decode
-from graspnet_dataset import GraspNetDataset, collate_fn
-from collision_detector import ModelFreeCollisionDetector
+from models.graspnet import GraspNet, pred_decode
+from dataset.graspnet_dataset import GraspNetDataset, collate_fn
+from utils.collision_detector import ModelFreeCollisionDetector
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset_root', required=True, help='Dataset root')
-parser.add_argument('--checkpoint_path', required=True, help='Model checkpoint path')
+parser.add_argument('--dataset_root', default="/data/hdd1/storage/junpeng/ws_anygrasp/graspnet-baseline/doc/example_data", help='Dataset root')
+parser.add_argument('--checkpoint_path', default="/data/hdd1/storage/junpeng/ws_anygrasp/graspnet-baseline/ckpt/checkpoint-rs.tar", help='Model checkpoint path')
 parser.add_argument('--dump_dir', required=True, help='Dump dir to save outputs')
 parser.add_argument('--camera', required=True, help='Camera split [realsense/kinect]')
 parser.add_argument('--num_point', type=int, default=20000, help='Point Number [default: 20000]')

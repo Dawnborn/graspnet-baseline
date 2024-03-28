@@ -1,9 +1,10 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
-// 
+//
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
 #include "group_points.h"
+
 #include "utils.h"
 
 void group_points_kernel_wrapper(int b, int c, int n, int npoints, int nsample,
@@ -25,13 +26,15 @@ at::Tensor group_points(at::Tensor points, at::Tensor idx) {
   }
 
   at::Tensor output =
-      torch::zeros({points.size(0), points.size(1), idx.size(1), idx.size(2)},
+      torch::zeros({points.size(0), points.size(1), idx.size(1),
+                    idx.size(2)},  // 1 3 1024 64
                    at::device(points.device()).dtype(at::ScalarType::Float));
 
   if (points.type().is_cuda()) {
-    group_points_kernel_wrapper(points.size(0), points.size(1), points.size(2),
-                                idx.size(1), idx.size(2), points.data<float>(),
-                                idx.data<int>(), output.data<float>());
+    group_points_kernel_wrapper(
+        points.size(0), points.size(1), points.size(2),  // 1 3 20000
+        idx.size(1), idx.size(2), points.data<float>(),  // 1024 64
+        idx.data<int>(), output.data<float>());
   } else {
     TORCH_CHECK(false, "CPU not supported");
   }

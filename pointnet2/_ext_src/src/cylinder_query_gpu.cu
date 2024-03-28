@@ -6,19 +6,28 @@
 
 #include "cuda_utils.h"
 
-__global__ void query_cylinder_point_kernel(int b, int n, int m, float radius, float hmin, float hmax,
-                                        int nsample,
-                                        const float *__restrict__ new_xyz,
-                                        const float *__restrict__ xyz,
-                                        const float *__restrict__ rot,
-                                        int *__restrict__ idx) {
+__global__ void query_cylinder_point_kernel(int b, int n, int m, float radius,
+                                            float hmin, float hmax, int nsample,
+                                            const float *__restrict__ new_xyz,
+                                            const float *__restrict__ xyz,
+                                            const float *__restrict__ rot,
+                                            int *__restrict__ idx) {
+  /*
+  在每个圆柱内部采n_sample个点
+  b 1
+  n 20000 原始点云数量
+  m 1024 新点云seed_point数量，每个seed_point对应一个圆柱
+  nsample 64 每个圆柱包含的点的数量
+  idx 1 1024 64 存储每个圆柱包含的点的id
+  block size (m)
+  */
   int batch_index = blockIdx.x;
   xyz += batch_index * n * 3;
   new_xyz += batch_index * m * 3;
   rot += batch_index * m * 9;
   idx += m * nsample * batch_index;
 
-  int index = threadIdx.x;
+  int index = threadIdx.x;  // thread num 是
   int stride = blockDim.x;
 
   float radius2 = radius * radius;
@@ -34,15 +43,20 @@ __global__ void query_cylinder_point_kernel(int b, int n, int m, float radius, f
     float r5 = rot[j * 9 + 5];
     float r6 = rot[j * 9 + 6];
     float r7 = rot[j * 9 + 7];
-    float r8 = rot[j * 9 + 8];
+    float r8 = rot[j * 9 + 8];  // 列存储矩阵
     for (int k = 0, cnt = 0; k < n && cnt < nsample; ++k) {
+      // 取出第k个原始点，cnt 表示该圆柱已经包含的点的数量
+
+      // 转到seed点为中心，approaching方向为x轴的坐标系下（具体yz朝向不影响到轴的距离大小）
       float x = xyz[k * 3 + 0] - new_x;
       float y = xyz[k * 3 + 1] - new_y;
       float z = xyz[k * 3 + 2] - new_z;
       float x_rot = r0 * x + r3 * y + r6 * z;
       float y_rot = r1 * x + r4 * y + r7 * z;
       float z_rot = r2 * x + r5 * y + r8 * z;
-      float d2 = y_rot * y_rot + z_rot * z_rot;
+      float d2 = y_rot * y_rot + z_rot * z_rot;  // 点距离轴心的距离
+
+      // 如果点距离圆柱轴心的距离足够小，且不超出h范围，则将k记录到属于当前seed点的id
       if (d2 < radius2 && x_rot > hmin && x_rot < hmax) {
         if (cnt == 0) {
           for (int l = 0; l < nsample; ++l) {
@@ -56,11 +70,13 @@ __global__ void query_cylinder_point_kernel(int b, int n, int m, float radius, f
   }
 }
 
-void query_cylinder_point_kernel_wrapper(int b, int n, int m, float radius, float hmin, float hmax,
-                                     int nsample, const float *new_xyz,
-                                     const float *xyz, const float *rot, int *idx) {
+void query_cylinder_point_kernel_wrapper(int b, int n, int m, float radius,
+                                         float hmin, float hmax, int nsample,
+                                         const float *new_xyz, const float *xyz,
+                                         const float *rot, int *idx) {
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  query_cylinder_point_kernel<<<b, opt_n_threads(m), 0, stream>>>(
+  query_cylinder_point_kernel<<<b, opt_n_threads(m), 0,
+                                stream>>>(  // 线程数为1024
       b, n, m, radius, hmin, hmax, nsample, new_xyz, xyz, rot, idx);
 
   CUDA_CHECK_ERRORS();

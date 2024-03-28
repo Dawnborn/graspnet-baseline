@@ -52,6 +52,11 @@ cd graspnetAPI
 pip install .
 ```
 
+install realsene
+```bash
+pip install pyrealsense2
+```
+
 ## Tolerance Label Generation
 Tolerance labels are not included in the original dataset, and need additional generation. Make sure you have downloaded the orginal dataset from [GraspNet](https://graspnet.net/). The generation code is in [dataset/generate_tolerance_label.py](dataset/generate_tolerance_label.py). You can simply generate tolerance label by running the script: (`--dataset_root` and `--num_workers` should be specified according to your settings)
 ```bash
@@ -130,3 +135,42 @@ Please cite our paper in your publications if it helps your research:
 
 ## License
 All data, labels, code and models belong to the graspnet team, MVIG, SJTU and are freely available for free non-commercial use, and may be redistributed under these conditions. For commercial queries, please drop an email at fhaoshu at gmail_dot_com and cc lucewu at sjtu.edu.cn .
+
+# MyInstall
+
+```
+python 01_inference_from_camera.py
+WARNING:root:Failed to import geometry msgs in rigid_transformations.py.
+WARNING:root:Failed to import ros dependencies in rigid_transforms.py
+WARNING:root:autolab_core not installed as catkin package, RigidTransform ros methods will be unavailable
+Traceback (most recent call last):
+  File "/data/hdd1/storage/junpeng/ws_anygrasp/graspnet-baseline/01_inference_from_camera.py", line 23, in <module>
+    from graspnet_dataset import GraspNetDataset        # 数据集
+  File "/data/hdd1/storage/junpeng/ws_anygrasp/graspnet-baseline/dataset/graspnet_dataset.py", line 12, in <module>
+    from torch._six import container_abcs
+ImportError: cannot import name 'container_abcs' from 'torch._six' (/home/junpeng.hu/anaconda3/envs/anygrasp2/lib/python3.9/site-packages/torch/_six.py)
+```
+
+conda create -n anygrasp_base python=3.9
+
+pip install torch==1.8.0+cu111 torchvision==0.9.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
+
+pip install numpy Pillow scipy tqdm open3d tensorboard 
+
+cd pointnet2
+python setup.py install
+
+cd knn
+python setup.py install
+
+pip install graspnetAPI
+```
+import graspnetAPI
+WARNING:root:Failed to import geometry msgs in rigid_transformations.py.
+WARNING:root:Failed to import ros dependencies in rigid_transforms.py
+WARNING:root:autolab_core not installed as catkin package, RigidTransform ros methods will be unavailable
+```
+没问题，可以正常运行
+
+# MyRun
+python 01_inference_from_camera.py --checkpoint_path /data/hdd1/storage/junpeng/ws_anygrasp/graspnet-baseline/ckpt/checkpoint-rs.tar

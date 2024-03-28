@@ -36,7 +36,9 @@ class ModelFreeCollisionDetector():
 
     def detect(self, grasp_group, approach_dist=0.03, collision_thresh=0.05, return_empty_grasp=False, empty_thresh=0.01, return_ious=False):
         """ Detect collision of grasps.
-
+                将夹爪简化成文章图片里叉子的形状，然后将点云转到抓取为原点的坐标系下
+                按照叉子尺寸过滤点云，再计算每个部分跟点云重叠的体积
+                计算重叠体积占叉子体积的比例，大于阈值则视为碰撞
             Input:
                 grasp_group: [GraspGroup, M grasps]
                     the grasps to check
@@ -67,7 +69,9 @@ class ModelFreeCollisionDetector():
                     only returned when [return_ious] is True
         """
         approach_dist = max(approach_dist, self.finger_width)
-        T = grasp_group.translations
+
+        # 将点云转换到抓取的坐标系下
+        T = grasp_group.translations # 抓取点，seed_point
         R = grasp_group.rotation_matrices
         heights = grasp_group.heights[:,np.newaxis]
         depths = grasp_group.depths[:,np.newaxis]
@@ -76,11 +80,11 @@ class ModelFreeCollisionDetector():
         targets = np.matmul(targets, R)
 
         ## collision detection
-        # height mask
+        # height mask 保留那些高度跟夹爪一致的点云
         mask1 = ((targets[:,:,2] > -heights/2) & (targets[:,:,2] < heights/2))
         # left finger mask
-        mask2 = ((targets[:,:,0] > depths - self.finger_length) & (targets[:,:,0] < depths))
-        mask3 = (targets[:,:,1] > -(widths/2 + self.finger_width))
+        mask2 = ((targets[:,:,0] > depths - self.finger_length) & (targets[:,:,0] < depths)) # left finger长度过滤
+        mask3 = (targets[:,:,1] > -(widths/2 + self.finger_width)) # left finger 宽度过滤
         mask4 = (targets[:,:,1] < -widths/2)
         # right finger mask
         mask5 = (targets[:,:,1] < (widths/2 + self.finger_width))

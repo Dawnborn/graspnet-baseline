@@ -213,9 +213,9 @@ class GroupingOperation(Function):
         Parameters
         ----------
         features : torch.Tensor
-            (B, C, N) tensor of features to group
+            (B, C, N) tensor of features to group 原始点云（1 3 20000）
         idx : torch.Tensor
-            (B, npoint, nsample) tensor containing the indicies of features to group with
+            (B, npoint, nsample) tensor containing the indicies of features to group with torch.Size([1, 1024, 64])
 
         Returns
         -------
@@ -505,10 +505,13 @@ class CylinderQueryAndGroup(nn.Module):
             (B, 3 + C, npoint, nsample) tensor
         """
         B, npoint, _ = new_xyz.size()
-        idx = cylinder_query(self.radius, self.hmin, self.hmax, self.nsample, xyz, new_xyz, rot.view(B, npoint, 9))
-
+        
+        # 以每个seed点生成一个圆柱，半径为radius，朝向由rot决定，长短由hmax hmin决定，然后在每个圆柱里至多放64个点
+        idx = cylinder_query(self.radius, self.hmin, self.hmax, self.nsample, xyz, new_xyz, rot.view(B, npoint, 9)) # idx 1 1024 64 存储每个圆柱包含的点的id
+        
+        # 在sample_uniformly模式下。在均匀采样的情况下，如果某个seed对应的圆柱内分配到的点数少于指定的最大采样数nsample，算法会从这些点中进行重采样补齐64个
         if self.sample_uniformly:
-            unique_cnt = torch.zeros((idx.shape[0], idx.shape[1]))
+            unique_cnt = torch.zeros((idx.shape[0], idx.shape[1])) # 
             for i_batch in range(idx.shape[0]):
                 for i_region in range(idx.shape[1]):
                     unique_ind = torch.unique(idx[i_batch, i_region, :])
@@ -518,9 +521,8 @@ class CylinderQueryAndGroup(nn.Module):
                     all_ind = torch.cat((unique_ind, unique_ind[sample_ind]))
                     idx[i_batch, i_region, :] = all_ind
 
-
         xyz_trans = xyz.transpose(1, 2).contiguous()
-        grouped_xyz = grouping_operation(xyz_trans, idx)  # (B, 3, npoint, nsample)
+        grouped_xyz = grouping_operation(xyz_trans, idx)  # (1 3 20000) (1 1024 64) -> (B, 3, npoint, nsample)
         grouped_xyz -= new_xyz.transpose(1, 2).unsqueeze(-1)
         if self.normalize_xyz:
             grouped_xyz /= self.radius
@@ -544,7 +546,7 @@ class CylinderQueryAndGroup(nn.Module):
             ), "Cannot have not features and not use xyz as a feature!"
             new_features = grouped_xyz
 
-        ret = [new_features]
+        ret = [new_features] # torch.Size([1, 3, 1024, 64])
         if self.ret_grouped_xyz:
             ret.append(grouped_xyz)
         if self.ret_unique_cnt:

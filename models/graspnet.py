@@ -18,8 +18,8 @@ sys.path.append(os.path.join(ROOT_DIR, 'utils'))
 from backbone import Pointnet2Backbone
 from modules import ApproachNet, CloudCrop, OperationNet, ToleranceNet
 from loss import get_loss
-from loss_utils import GRASP_MAX_WIDTH, GRASP_MAX_TOLERANCE
-from label_generation import process_grasp_labels, match_grasp_view_and_label, batch_viewpoint_params_to_matrix
+from utils.loss_utils import GRASP_MAX_WIDTH, GRASP_MAX_TOLERANCE
+from utils.label_generation import process_grasp_labels, match_grasp_view_and_label, batch_viewpoint_params_to_matrix
 
 
 class GraspNetStage1(nn.Module):
@@ -30,8 +30,8 @@ class GraspNetStage1(nn.Module):
 
     def forward(self, end_points):
         pointcloud = end_points['point_clouds']
-        seed_features, seed_xyz, end_points = self.backbone(pointcloud, end_points)
-        end_points = self.vpmodule(seed_xyz, seed_features, end_points)
+        seed_features, seed_xyz, end_points = self.backbone(pointcloud, end_points) # pointnet 处理后每个group的结果作为seed，(B, num_seed, 3），（B，input_feature_dim, num_seed)
+        end_points = self.vpmodule(seed_xyz, seed_features, end_points) # 
         return end_points
 
 
@@ -51,10 +51,10 @@ class GraspNetStage2(nn.Module):
             grasp_top_views_rot, _, _, _, end_points = match_grasp_view_and_label(end_points)
             seed_xyz = end_points['batch_grasp_point']
         else:
-            grasp_top_views_rot = end_points['grasp_top_view_rot']
-            seed_xyz = end_points['fp2_xyz']
+            grasp_top_views_rot = end_points['grasp_top_view_rot'] # 1 1024 3 3
+            seed_xyz = end_points['fp2_xyz'] # 1 1024 3
 
-        vp_features = self.crop(seed_xyz, pointcloud, grasp_top_views_rot)
+        vp_features = self.crop(seed_xyz, pointcloud, grasp_top_views_rot) # -> B, dim_features, num_seed, num_depth; torch.Size([1, 256, 1024, 4])
         end_points = self.operation(vp_features, end_points)
         end_points = self.tolerance(vp_features, end_points)
 
@@ -79,36 +79,36 @@ def pred_decode(end_points):
     grasp_preds = []
     for i in range(batch_size):
         ## load predictions
-        objectness_score = end_points['objectness_score'][i].float()
-        grasp_score = end_points['grasp_score_pred'][i].float()
-        grasp_center = end_points['fp2_xyz'][i].float()
-        approaching = -end_points['grasp_top_view_xyz'][i].float()
-        grasp_angle_class_score = end_points['grasp_angle_cls_pred'][i]
-        grasp_width = 1.2 * end_points['grasp_width_pred'][i]
-        grasp_width = torch.clamp(grasp_width, min=0, max=GRASP_MAX_WIDTH)
-        grasp_tolerance = end_points['grasp_tolerance_pred'][i]
+        objectness_score = end_points['objectness_score'][i].float() # torch.Size([1, 2, 1024])
+        grasp_score = end_points['grasp_score_pred'][i].float() # torch.Size([1, 12, 1024, 4]) B, num_angles, num_seed, num_depth
+        grasp_center = end_points['fp2_xyz'][i].float() # num_seed, 3
+        approaching = -end_points['grasp_top_view_xyz'][i].float() # num_seed, 3
+        grasp_angle_class_score = end_points['grasp_angle_cls_pred'][i] # num_angle, num_seed, num_depth) torch.Size([12, 1024, 4])
+        grasp_width = 1.2 * end_points['grasp_width_pred'][i] 
+        grasp_width = torch.clamp(grasp_width, min=0, max=GRASP_MAX_WIDTH) # (num_angle, num_seed, num_depth)
+        grasp_tolerance = end_points['grasp_tolerance_pred'][i] # (num_angle, num_seed, num_depth)
 
-        ## slice preds by angle
+        ## slice preds by angle ##每个深度返回得分最大的角度
         # grasp angle
-        grasp_angle_class = torch.argmax(grasp_angle_class_score, 0)
-        grasp_angle = grasp_angle_class.float() / 12 * np.pi
+        grasp_angle_class = torch.argmax(grasp_angle_class_score, 0) # 挑选得分最高的angle (num_angle, num_seed, num_depth))
+        grasp_angle = grasp_angle_class.float() / 12 * np.pi #TODO: 硬编码抓取角度，返回结果为弧度
         # grasp score & width & tolerance
-        grasp_angle_class_ = grasp_angle_class.unsqueeze(0)
-        grasp_score = torch.gather(grasp_score, 0, grasp_angle_class_).squeeze(0)
+        grasp_angle_class_ = grasp_angle_class.unsqueeze(0) 
+        grasp_score = torch.gather(grasp_score, 0, grasp_angle_class_).squeeze(0) # torch.Size([1024, 4]) -> torch.Size([1024, 4])
         grasp_width = torch.gather(grasp_width, 0, grasp_angle_class_).squeeze(0)
         grasp_tolerance = torch.gather(grasp_tolerance, 0, grasp_angle_class_).squeeze(0)
 
-        ## slice preds by score/depth
+        ## slice preds by score/depth ##每个seed_poin返回grasp_score最大的深度
         # grasp depth
         grasp_depth_class = torch.argmax(grasp_score, 1, keepdims=True)
-        grasp_depth = (grasp_depth_class.float()+1) * 0.01
+        grasp_depth = (grasp_depth_class.float()+1) * 0.01 # 抓取
         # grasp score & angle & width & tolerance
         grasp_score = torch.gather(grasp_score, 1, grasp_depth_class)
         grasp_angle = torch.gather(grasp_angle, 1, grasp_depth_class)
         grasp_width = torch.gather(grasp_width, 1, grasp_depth_class)
         grasp_tolerance = torch.gather(grasp_tolerance, 1, grasp_depth_class)
 
-        ## slice preds by objectness
+        ## slice preds by objectness ##保留判断为可抓的点
         objectness_pred = torch.argmax(objectness_score, 0)
         objectness_mask = (objectness_pred==1)
         grasp_score = grasp_score[objectness_mask]
@@ -118,7 +118,7 @@ def pred_decode(end_points):
         grasp_angle = grasp_angle[objectness_mask]
         grasp_center = grasp_center[objectness_mask]
         grasp_tolerance = grasp_tolerance[objectness_mask]
-        grasp_score = grasp_score * grasp_tolerance / GRASP_MAX_TOLERANCE
+        grasp_score = grasp_score * grasp_tolerance / GRASP_MAX_TOLERANCE # 鼓励更大的tolerance
 
         ## convert to rotation matrix
         Ns = grasp_angle.size(0)
@@ -128,7 +128,7 @@ def pred_decode(end_points):
         rotation_matrix = rotation_matrix.view(Ns, 9)
 
         # merge preds
-        grasp_height = 0.02 * torch.ones_like(grasp_score)
+        grasp_height = 0.02 * torch.ones_like(grasp_score) # 定义抓取高度grasp_height，夹爪侧面的“宽度”
         obj_ids = -1 * torch.ones_like(grasp_score)
         grasp_preds.append(torch.cat([grasp_score, grasp_width, grasp_height, grasp_depth, rotation_matrix, grasp_center, obj_ids], axis=-1))
     return grasp_preds
